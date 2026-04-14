@@ -260,6 +260,65 @@ func TestDeserializeResponse_WithStringArrayMarket(t *testing.T) {
 	require.Equal(t, []string{"abc"}, resp.Parameters[0])
 }
 
+func TestDeserializeRequest_OpMove_PostPatch(t *testing.T) {
+	payload := []byte{
+		0x16,
+		0x05,
+		0x00, typeLong2, 0xe8, 0x03,
+		0x01, typeArray | typeFloat, 0x02,
+		0x00, 0x00, 0x28, 0x41,
+		0x00, 0x00, 0xa4, 0x41,
+		0x02, typeFloat, 0x00, 0x00, 0xc0, 0x3f,
+		0x03, typeArray | typeFloat, 0x02,
+		0x00, 0x00, 0x18, 0x41,
+		0x00, 0x00, 0x9c, 0x41,
+		0x04, typeFloat, 0x00, 0x00, 0xb0, 0x40,
+	}
+
+	req, err := DeserializeRequest(payload)
+	require.NoError(t, err)
+	PostProcessRequest(req)
+
+	require.Equal(t, byte(22), req.OperationCode)
+	require.Equal(t, int64(1000), req.Parameters[0])
+	require.Equal(t, []float32{10.5, 20.5}, req.Parameters[1])
+	require.Equal(t, float32(1.5), req.Parameters[2])
+	require.Equal(t, []float32{9.5, 19.5}, req.Parameters[3])
+	require.Equal(t, float32(5.5), req.Parameters[4])
+	require.Equal(t, byte(22), req.Parameters[253])
+}
+
+func TestDeserializeResponse_JoinMap_PostPatch(t *testing.T) {
+	payload := []byte{
+		0x02,
+		0x00, 0x00,
+		typeNull,
+		0x02,
+		0x09, typeArray | typeFloat, 0x02,
+		0x00, 0x00, 0xc8, 0x42,
+		0x00, 0x00, 0x48, 0x43,
+		0x67, typeHashtable,
+		typeByte, typeByte,
+		0x02,
+		0x05, 0x01,
+		0x07, 0x00,
+	}
+
+	resp, err := DeserializeResponse(payload)
+	require.NoError(t, err)
+	PostProcessResponse(resp)
+
+	require.Equal(t, byte(2), resp.OperationCode)
+	require.Equal(t, int16(0), resp.ReturnCode)
+	require.Equal(t, []float32{100.0, 200.0}, resp.Parameters[9])
+
+	ht, ok := resp.Parameters[103].(map[interface{}]interface{})
+	require.True(t, ok, "params[103] must be a hashtable, got %T", resp.Parameters[103])
+	require.Equal(t, byte(1), ht[byte(5)])
+	require.Equal(t, byte(0), ht[byte(7)])
+	require.Equal(t, byte(2), resp.Parameters[253])
+}
+
 func TestDeserialize_ZeroValues(t *testing.T) {
 	cases := []struct {
 		name string
