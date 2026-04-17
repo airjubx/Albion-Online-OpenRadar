@@ -98,7 +98,7 @@ jobs:
   # This replaces the Docker-built .exe with a cosmetically enhanced one.
   # ---------------------------------------------------------------------------
   enhance-windows:
-    needs: lint-and-test
+    needs: build
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
