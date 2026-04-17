@@ -24,7 +24,8 @@ LDFLAGS := -s -w -X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME)
 DIST := dist
 
 .PHONY: help dev run css css-watch vendors test lint lint-fix clean \
-        install-tools assets restore-assets \
+        install-tools assets restore-assets refresh-assets \
+        update-ao-data download-icons download-spells download-map \
         build-linux build-windows readmes checksums all-in-one \
         release release-dry-run
 
@@ -48,6 +49,13 @@ help: ## Display help
 	@echo "  build-linux       Build Linux binary (native on Linux, Docker elsewhere)"
 	@echo "  build-windows     Build Windows .exe (native on Windows, Docker elsewhere)"
 	@echo "  all-in-one        assets + both binaries + READMEs + checksums + restore"
+	@echo ""
+	@echo "Assets refresh (committed to repo):"
+	@echo "  update-ao-data    Update Albion Online data JSON files"
+	@echo "  download-icons    Download + optimize item icons"
+	@echo "  download-spells   Download + optimize spell icons"
+	@echo "  download-map      Download + optimize world map (Puppeteer)"
+	@echo "  refresh-assets    Run all of the above sequentially"
 	@echo ""
 	@echo "Release:"
 	@echo "  release-dry-run   all-in-one + generate dist/RELEASE.md (no tag, no GH call)"
@@ -110,6 +118,22 @@ assets: ## Install deps, build CSS, copy vendors, gzip embedded data
 restore-assets: ## Restore web/ao-bin-dumps/*.json from git, remove *.gz
 	git checkout -- web/ao-bin-dumps/
 	rm -f web/ao-bin-dumps/*.gz
+
+update-ao-data: ## Refresh web/ao-bin-dumps/*.json from upstream
+	npx tsx tools/update-ao-data.ts --replace-existing
+
+download-icons: ## Refresh item icons (web/images/icons/)
+	npx tsx tools/download-and-optimize-item-icons.ts
+
+download-spells: ## Refresh spell icons (web/images/spells/)
+	npx tsx tools/download-and-optimize-spell-icons.ts
+
+download-map: ## Refresh world map (web/images/map/)
+	npx tsx tools/download-and-optimize-map.ts
+
+refresh-assets: update-ao-data download-icons download-spells download-map ## Refresh all network-sourced assets
+	@echo ""
+	@echo "All assets refreshed. Review changes with 'git status' before committing."
 
 # ============================================================================
 # Build
