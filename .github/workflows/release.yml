@@ -3,11 +3,12 @@ name: Release
 on:
   push:
     tags:
+      - "v[0-9]+.[0-9]+.[0-9]+*"
       - "[0-9]+.[0-9]+.[0-9]+*"
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to release (e.g., 2.2.0)"
+        description: "Tag to release (e.g. 2.2.0)"
         required: true
         type: string
 
@@ -19,100 +20,94 @@ env:
   VERSION: ${{ github.event.inputs.tag || github.ref_name }}
 
 jobs:
-  # ═══════════════════════════════════════════════════════════════
-  # Build Linux binary via Docker (CGO + libpcap)
-  # ═══════════════════════════════════════════════════════════════
-  build-linux:
+  lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup
 
-      - uses: actions/setup-node@v4
+      - name: Lint Go
+        uses: golangci/golangci-lint-action@v8
         with:
-          node-version: "20"
-          cache: "npm"
+          version: v2.7.2
 
-      - run: npm ci
+      - name: Lint Frontend
+        run: npm run lint
 
-      # ─── Prepare assets (same as .goreleaser.yml before.hooks) ───
-      - name: Update AO data
-        run: npx tsx tools/update-ao-data.ts --replace-existing
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup
 
-      - name: Build CSS
-        run: npm run css
+      - name: Test Go
+        run: go test ./...
 
-      - name: Copy vendors
-        run: npm run vendors
+      - name: Test Frontend
+        run: npm test
 
-      - name: Compress game data
-        run: npx tsx tools/compress-game-data.ts web/ao-bin-dumps --delete-originals
-
-      # ─── Docker build with cache ───
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build Linux binary
-        uses: docker/build-push-action@v6
+  build:
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
         with:
-          context: .
-          file: Dockerfile.build
-          outputs: type=local,dest=dist-build
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          build-args: |
-            VERSION=${{ env.VERSION }}
-            BUILD_TIME=${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}
-
-      - name: Rename binary
-        run: mv dist-build/OpenRadar-linux dist-build/OpenRadar-linux-amd64
-
-      - name: Upload Linux binary
-        uses: actions/upload-artifact@v4
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
         with:
-          name: linux-binary
-          path: dist-build/OpenRadar-linux-amd64
+          fetch-depth: "0"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build all artifacts
+        run: make all-in-one VERSION=${{ env.VERSION }}
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
           retention-days: 1
 
-  # ═══════════════════════════════════════════════════════════════
-  # Build Windows binary natively (CGO + Npcap SDK)
-  # ═══════════════════════════════════════════════════════════════
-  build-windows:
+  enhance-windows:
+    needs: build
     runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-go@v5
         with:
           go-version-file: "go.mod"
           cache: true
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: "lts/*"
           cache: "npm"
 
       - run: npm ci
 
-      # ─── Prepare assets ───
-      - name: Update AO data
-        run: npx tsx tools/update-ao-data.ts --replace-existing
+      - name: Prepare embedded assets
+        shell: bash
+        run: |
+          npm run build
+          npx tsx tools/compress-game-data.ts web/ao-bin-dumps --delete-originals
 
-      - name: Build CSS
-        run: npm run css
-
-      - name: Copy vendors
-        run: npm run vendors
-
-      - name: Compress game data
-        run: npx tsx tools/compress-game-data.ts web/ao-bin-dumps --delete-originals
-
-      - run: go mod tidy
-
-      # ─── Windows resources (icon + version info) ───
       - name: Install goversioninfo
         run: go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest
 
-      - name: Generate version info
+      - name: Generate versioninfo.json
         shell: pwsh
         run: |
           $version = "${{ env.VERSION }}"
@@ -120,180 +115,87 @@ jobs:
           $major = if ($parts[0] -match '^\d+$') { [int]$parts[0] } else { 0 }
           $minor = if ($parts.Length -gt 1 -and $parts[1] -match '^\d+$') { [int]$parts[1] } else { 0 }
           $patch = if ($parts.Length -gt 2 -and $parts[2] -match '^\d+$') { [int]$parts[2] } else { 0 }
-
           $json = @{
             FixedFileInfo = @{
-              FileVersion = @{ Major = $major; Minor = $minor; Patch = $patch; Build = 0 }
+              FileVersion    = @{ Major = $major; Minor = $minor; Patch = $patch; Build = 0 }
               ProductVersion = @{ Major = $major; Minor = $minor; Patch = $patch; Build = 0 }
             }
             StringFileInfo = @{
               FileDescription = "OpenRadar - Albion Online Radar"
-              FileVersion = $version
-              ProductName = "OpenRadar"
-              ProductVersion = $version
-              LegalCopyright = "MIT License"
+              FileVersion     = $version
+              ProductName     = "OpenRadar"
+              ProductVersion  = $version
+              LegalCopyright  = "MIT License"
             }
             IconPath = "../../web/images/favicon.ico"
           } | ConvertTo-Json -Depth 10
-
           $json | Out-File -FilePath cmd/radar/versioninfo.json -Encoding UTF8
 
       - name: Generate Windows resources
         run: goversioninfo -64
         working-directory: cmd/radar
 
-      # ─── Build ───
-      - name: Build Windows binary
-        shell: pwsh
+      - name: Build Windows binary with embedded resources
+        shell: bash
+        env:
+          CGO_ENABLED: "1"
         run: |
-          $env:CGO_ENABLED = "1"
-          $buildTime = Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ"
-          go build -ldflags="-s -w -X main.Version=${{ env.VERSION }} -X main.BuildTime=$buildTime" -o dist-build/OpenRadar-windows-amd64.exe ./cmd/radar
+          BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          mkdir -p dist
+          go build \
+            -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
+            -o dist/OpenRadar-windows-amd64.exe ./cmd/radar
 
-      - name: Upload Windows binary
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
-          name: windows-binary
-          path: dist-build/OpenRadar-windows-amd64.exe
+          name: windows-enhanced
+          path: dist/OpenRadar-windows-amd64.exe
           retention-days: 1
 
-  # ═══════════════════════════════════════════════════════════════
-  # Assemble release artifacts and create GitHub Release (draft)
-  # ═══════════════════════════════════════════════════════════════
-  create-release:
-    needs: [build-linux, build-windows]
+  release:
+    needs: [build, enhance-windows]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/download-artifact@v7
         with:
-          node-version: "20"
-          cache: "npm"
-
-      - run: npm ci
-
-      # ─── Download build artifacts ───
-      - name: Download Linux binary
-        uses: actions/download-artifact@v4
-        with:
-          name: linux-binary
+          name: dist
           path: dist
 
-      - name: Download Windows binary
-        uses: actions/download-artifact@v4
+      - name: Overlay enhanced Windows .exe
+        uses: actions/download-artifact@v7
         with:
-          name: windows-binary
+          name: windows-enhanced
           path: dist
 
-      # ─── Generate READMEs ───
-      - name: Generate READMEs
-        run: npx tsx tools/generate-readmes.ts --output-dir=dist --version=${{ env.VERSION }}
-
-      # ─── Generate checksums ───
-      - name: Generate checksums
+      - name: Regenerate checksums (Windows .exe changed)
         working-directory: dist
         run: sha256sum OpenRadar-linux-amd64 OpenRadar-windows-amd64.exe README-linux.txt README-windows.txt > checksums-sha256.txt
 
-      # ─── List final artifacts ───
-      - name: List artifacts
-        run: ls -la dist/
-
-      # ─── Generate changelog from Conventional Commits ───
-      - name: Get previous tag
-        id: prev_tag
-        run: |
-          PREV_TAG=$(git describe --tags --abbrev=0 ${{ env.VERSION }}^ 2>/dev/null || echo "")
-          echo "tag=$PREV_TAG" >> $GITHUB_OUTPUT
-          echo "Previous tag: $PREV_TAG"
-
       - name: Generate release notes
-        run: |
-          PREV_TAG="${{ steps.prev_tag.outputs.tag }}"
-          VERSION="${{ env.VERSION }}"
-
-          if [ -z "$PREV_TAG" ]; then
-            RANGE="HEAD"
-            COMPARE_LINK=""
-          else
-            RANGE="${PREV_TAG}..HEAD"
-            COMPARE_LINK="**Full Changelog**: https://github.com/Nouuu/Albion-Online-OpenRadar/compare/${PREV_TAG}...${VERSION}"
-          fi
-
-          echo "Generating changelog for range: $RANGE"
-
-          # Get commits and categorize by Conventional Commits
-          FEATURES=$(git log $RANGE --pretty=format:"- %s" --grep="^feat" 2>/dev/null | sed 's/- feat[^:]*:/- /' || true)
-          FIXES=$(git log $RANGE --pretty=format:"- %s" --grep="^fix" 2>/dev/null | sed 's/- fix[^:]*:/- /' || true)
-          PERF=$(git log $RANGE --pretty=format:"- %s" --grep="^perf" 2>/dev/null | sed 's/- perf[^:]*:/- /' || true)
-
-          # Build release notes file
-          cat > release-notes.md << 'HEADER'
-          ## OpenRadar v${{ env.VERSION }}
-
-          Real-time radar for Albion Online.
-
-          HEADER
-
-          if [ -n "$FEATURES" ]; then
-            echo "### ✨ Features" >> release-notes.md
-            echo "" >> release-notes.md
-            echo "$FEATURES" >> release-notes.md
-            echo "" >> release-notes.md
-          fi
-
-          if [ -n "$FIXES" ]; then
-            echo "### 🐛 Bug Fixes" >> release-notes.md
-            echo "" >> release-notes.md
-            echo "$FIXES" >> release-notes.md
-            echo "" >> release-notes.md
-          fi
-
-          if [ -n "$PERF" ]; then
-            echo "### ⚡ Performance" >> release-notes.md
-            echo "" >> release-notes.md
-            echo "$PERF" >> release-notes.md
-            echo "" >> release-notes.md
-          fi
-
-          cat >> release-notes.md << EOF
-          ---
-
-          ### Verification
-
-          \`\`\`bash
-          sha256sum -c checksums-sha256.txt
-          \`\`\`
-
-          ### Requirements
-
-          **Windows:** Windows 10/11 (64-bit), [Npcap 1.84+](https://npcap.com/)
-
-          **Linux:** libpcap (\`apt install libpcap0.8\`)
-
-          ---
-
-          ${COMPARE_LINK}
-          EOF
-
-          echo "Generated release notes:"
-          cat release-notes.md
-
-      # ─── Create GitHub Release (draft) ───
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: orhun/git-cliff-action@v4
         with:
-          tag_name: ${{ env.VERSION }}
-          name: "OpenRadar v${{ env.VERSION }}"
-          draft: true
-          body_path: release-notes.md
-          files: |
-            dist/OpenRadar-linux-amd64
-            dist/OpenRadar-windows-amd64.exe
-            dist/README-linux.txt
-            dist/README-windows.txt
+          config: cliff.toml
+          args: --latest
+        env:
+          OUTPUT: dist/RELEASE.md
+
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ env.VERSION }}" \
+            --draft \
+            --title "OpenRadar v${{ env.VERSION }}" \
+            --notes-file dist/RELEASE.md \
+            dist/OpenRadar-linux-amd64 \
+            dist/OpenRadar-windows-amd64.exe \
+            dist/README-linux.txt \
+            dist/README-windows.txt \
             dist/checksums-sha256.txt
