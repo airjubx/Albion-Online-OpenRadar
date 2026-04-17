@@ -50,7 +50,9 @@ sha256sum -c checksums-sha256.txt
 {%- endif %}
 """
 trim = true
-postprocessors = []
+postprocessors = [
+  { pattern = '\z', replace = "\n" },
+]
 
 [git]
 conventional_commits = true
