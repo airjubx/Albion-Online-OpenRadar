@@ -182,9 +182,9 @@ all-in-one: ## Full release artifacts (both binaries + READMEs + checksums)
 # ============================================================================
 
 release-dry-run: all-in-one ## Full build + generate RELEASE.md for review
-	git-cliff --latest --config cliff.toml --output $(DIST)/RELEASE.md
+	git-cliff --unreleased --config cliff.toml --output $(DIST)/RELEASE.md
 	@echo ""
-	@echo "Release notes: $(DIST)/RELEASE.md"
+	@echo "Release notes (unreleased commits since last tag): $(DIST)/RELEASE.md"
 	@echo "Review before running 'make release TAG=x.y.z'"
 
 release: ## Create draft GitHub release (requires TAG=x.y.z)
