@@ -8,12 +8,6 @@ header = ""
 body = """
 {% set repo_url = "https://github.com/Nouuu/Albion-Online-OpenRadar" -%}
 
-{% if version -%}
-## OpenRadar v{{ version }}
-{%- else -%}
-## OpenRadar (Dry-run preview)
-{%- endif %}
-
 Real-time radar for Albion Online.
 
 {% for group, commits in commits | group_by(attribute="group") -%}
