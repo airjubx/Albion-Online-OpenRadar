@@ -26,26 +26,18 @@ jobs:
           node-version: "20"
           cache: "npm"
 
-      - run: npm ci
-
-      - name: Install libpcap (for CGO)
+      - name: Install libpcap (CGO)
         run: sudo apt-get update && sudo apt-get install -y libpcap-dev
 
-      - name: Lint Go
-        uses: golangci/golangci-lint-action@v7
-        with:
-          version: v2.7.2
+      - name: Install golangci-lint
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh \
+            | sh -s -- -b "$(go env GOPATH)/bin" v2.11.4
 
-      - name: Lint Frontend
-        run: npm run lint
+      - run: npm ci
 
-      - name: Test Frontend
-        run: npm test
+      - name: Lint
+        run: make lint
 
-      - name: Test Go
-        run: go test -v ./...
-
-      - name: Build Check (Linux)
-        run: go build -o /dev/null ./cmd/radar
-        env:
-          CGO_ENABLED: "1"
+      - name: Test
+        run: make test
