@@ -58,7 +58,7 @@ Issues pinned by regression tests: #25, #29 (root), #30, #32, #36, #53 (8 codes)
 - `npm run lint`: exit 0, no issues.
 - `go build ./...`: exit 0.
 - `golangci-lint run`: exit 0.
-- `make run` smoke: NOT run in this automated session. Recommended before PR merge.
+- `make run` smoke: executed via Playwright headless on 2026-04-18 against `go run ./cmd/radar -dev -ip 192.168.1.37`. Home page loads (title "OpenRadar, Radar"), sidebar navigation renders (Radar, Players, Resources, Enemies, Chests, Ignore List, Settings), all five ao-bin-dumps JSON databases load (items, spells, harvestables, mobs, zones), cross-page navigation works (Players page renders), zero console errors or warnings across the session.
 
 ## Pipeline delivered
 
