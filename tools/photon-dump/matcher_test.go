@@ -45,3 +45,18 @@ func TestMatchResponse_CodeMatch(t *testing.T) {
 	rWrong := &photon.OperationResponse{OperationCode: 41, ReturnCode: 0, Parameters: map[byte]interface{}{}}
 	require.False(t, matchesResponse(m, rWrong))
 }
+
+func TestMatchEvent_AlbionCodeFromParameters(t *testing.T) {
+	m := MatchCriteria{Kind: "event", Code: 29}
+	ev := &photon.EventData{Code: 1, Parameters: map[byte]interface{}{252: int64(29)}}
+	require.True(t, matchesEvent(m, ev), "wrapped event should match via Parameters[252]")
+
+	other := &photon.EventData{Code: 1, Parameters: map[byte]interface{}{252: int64(40)}}
+	require.False(t, matchesEvent(m, other))
+}
+
+func TestMatchEvent_WildcardCode(t *testing.T) {
+	m := MatchCriteria{Kind: "event", Code: -1}
+	ev := &photon.EventData{Code: 1, Parameters: map[byte]interface{}{252: int64(29)}}
+	require.True(t, matchesEvent(m, ev))
+}

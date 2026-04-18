@@ -31,16 +31,7 @@ func runExtract(in, outGo, outJS string, scenarios []Scenario) error {
 	parser := photon.NewPhotonParser(
 		func(e *photon.EventData) {
 			for _, s := range scenarios {
-				if s.Match.Kind != "event" {
-					continue
-				}
-				if s.Match.Code != -1 && int(e.Code) != s.Match.Code {
-					continue
-				}
-				if !matchesWhere(s.Match.Where, e.Parameters) {
-					continue
-				}
-				if counts[s.Name] >= limitFor(s) {
+				if !matchesEvent(s.Match, e) || counts[s.Name] >= limitFor(s) {
 					continue
 				}
 				captured[s.Name] = append(captured[s.Name], hit{
@@ -52,16 +43,7 @@ func runExtract(in, outGo, outJS string, scenarios []Scenario) error {
 		},
 		func(r *photon.OperationRequest) {
 			for _, s := range scenarios {
-				if s.Match.Kind != "request" {
-					continue
-				}
-				if s.Match.Code != -1 && int(r.OperationCode) != s.Match.Code {
-					continue
-				}
-				if !matchesWhere(s.Match.Where, r.Parameters) {
-					continue
-				}
-				if counts[s.Name] >= limitFor(s) {
+				if !matchesRequest(s.Match, r) || counts[s.Name] >= limitFor(s) {
 					continue
 				}
 				captured[s.Name] = append(captured[s.Name], hit{
@@ -73,16 +55,7 @@ func runExtract(in, outGo, outJS string, scenarios []Scenario) error {
 		},
 		func(r *photon.OperationResponse) {
 			for _, s := range scenarios {
-				if s.Match.Kind != "response" {
-					continue
-				}
-				if s.Match.Code != -1 && int(r.OperationCode) != s.Match.Code {
-					continue
-				}
-				if !matchesWhere(s.Match.Where, r.Parameters) {
-					continue
-				}
-				if counts[s.Name] >= limitFor(s) {
+				if !matchesResponse(s.Match, r) || counts[s.Name] >= limitFor(s) {
 					continue
 				}
 				captured[s.Name] = append(captured[s.Name], hit{
