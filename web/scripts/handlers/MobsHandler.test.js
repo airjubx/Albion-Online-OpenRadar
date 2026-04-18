@@ -270,4 +270,133 @@ describe('MobsHandler', () => {
             expect(handler.getSize().mists).toBe(mists.length);
         });
     });
+
+    // -------------------------------------------------------------------------
+    // _getEnemyTypeFromCategory heuristics (all synthetic)
+    // -------------------------------------------------------------------------
+
+    describe('_getEnemyTypeFromCategory heuristics', () => {
+        function spawnWithDbInfo(id, dbInfo) {
+            window.mobsDatabase = makeDb({[id]: dbInfo});
+            const p = normalizeParams({'0': id, '1': id, '2': 255, '7': [0, 0], '13': 500, '33': 0});
+            handler.NewMobEvent(p);
+        }
+
+        // @verified 2026-04-18: category='boss' yields EnemyType.Boss.
+        test("synthetic: category='boss' -> EnemyType.Boss", () => {
+            // synthetic: no boss-category mob observable in the 25-min capture.
+            spawnWithDbInfo(1001, {isHarvestable: false, category: 'boss', uniqueName: 'T8_BOSS_MERLIN', tier: 8});
+            const mobs = handler.getMobList();
+            expect(mobs).toHaveLength(1);
+            expect(mobs[0].type).toBe(EnemyType.Boss);
+        });
+
+        // @verified 2026-04-18: category='miniboss' yields EnemyType.MiniBoss.
+        test("synthetic: category='miniboss' -> EnemyType.MiniBoss", () => {
+            // synthetic: no miniboss-category mob in capture.
+            spawnWithDbInfo(1002, {isHarvestable: false, category: 'miniboss', uniqueName: 'T6_MINIBOSS_KEEPER', tier: 6});
+            const mobs = handler.getMobList();
+            expect(mobs).toHaveLength(1);
+            expect(mobs[0].type).toBe(EnemyType.MiniBoss);
+        });
+
+        // @verified 2026-04-18: category='champion' yields EnemyType.EnchantedEnemy.
+        test("synthetic: category='champion' -> EnemyType.EnchantedEnemy", () => {
+            // synthetic: champion category not in capture.
+            spawnWithDbInfo(1003, {isHarvestable: false, category: 'champion', uniqueName: 'T6_MOB_KEEPER_CHAMPION', tier: 6});
+            const mobs = handler.getMobList();
+            expect(mobs).toHaveLength(1);
+            expect(mobs[0].type).toBe(EnemyType.EnchantedEnemy);
+        });
+
+        // @verified 2026-04-18: category='rd_elite' yields EnemyType.MiniBoss.
+        test("synthetic: category='rd_elite' -> EnemyType.MiniBoss", () => {
+            // synthetic: rd_elite not in capture.
+            spawnWithDbInfo(1004, {isHarvestable: false, category: 'rd_elite', uniqueName: 'T5_MOB_RD_ELITE', tier: 5});
+            const mobs = handler.getMobList();
+            expect(mobs).toHaveLength(1);
+            expect(mobs[0].type).toBe(EnemyType.MiniBoss);
+        });
+
+        // @verified 2026-04-18: category='rd_veteran' yields EnemyType.MiniBoss.
+        test("synthetic: category='rd_veteran' -> EnemyType.MiniBoss", () => {
+            // synthetic: rd_veteran not in capture.
+            spawnWithDbInfo(1005, {isHarvestable: false, category: 'rd_veteran', uniqueName: 'T5_MOB_RD_VETERAN', tier: 5});
+            const mobs = handler.getMobList();
+            expect(mobs).toHaveLength(1);
+            expect(mobs[0].type).toBe(EnemyType.MiniBoss);
+        });
+
+        // @verified 2026-04-18: category='rd_solo' yields EnemyType.EnchantedEnemy.
+        test("synthetic: category='rd_solo' -> EnemyType.EnchantedEnemy", () => {
+            // synthetic: rd_solo not in capture.
+            spawnWithDbInfo(1006, {isHarvestable: false, category: 'rd_solo', uniqueName: 'T4_MOB_RD_SOLO', tier: 4});
+            const mobs = handler.getMobList();
+            expect(mobs).toHaveLength(1);
+            expect(mobs[0].type).toBe(EnemyType.EnchantedEnemy);
+        });
+
+        // @verified 2026-04-18: category='standard' yields EnemyType.Enemy (representative normal tier).
+        test("synthetic: category='standard' -> EnemyType.Enemy", () => {
+            // synthetic: representative normal-tier path test.
+            spawnWithDbInfo(1007, {isHarvestable: false, category: 'standard', uniqueName: 'T4_MOB_KEEPER', tier: 4});
+            const mobs = handler.getMobList();
+            expect(mobs).toHaveLength(1);
+            expect(mobs[0].type).toBe(EnemyType.Enemy);
+        });
+
+        // @verified 2026-04-18: category='trash' yields EnemyType.Enemy.
+        test("synthetic: category='trash' -> EnemyType.Enemy", () => {
+            // synthetic: trash category path.
+            spawnWithDbInfo(1008, {isHarvestable: false, category: 'trash', uniqueName: 'T3_MOB_TRASH', tier: 3});
+            const mobs = handler.getMobList();
+            expect(mobs).toHaveLength(1);
+            expect(mobs[0].type).toBe(EnemyType.Enemy);
+        });
+
+        // @verified 2026-04-18: uniqueName containing '_VETERAN' (not VETERAN_CHAMPION) yields MiniBoss regardless of category.
+        test("synthetic: uniqueName '_VETERAN' (not VETERAN_CHAMPION) -> EnemyType.MiniBoss overrides category", () => {
+            // synthetic: heuristic override - VETERAN name in a static category mob.
+            spawnWithDbInfo(1009, {isHarvestable: false, category: 'static', uniqueName: 'T6_MOB_MORGANA_CROSSBOWMAN_VETERAN', tier: 6});
+            const mobs = handler.getMobList();
+            expect(mobs).toHaveLength(1);
+            expect(mobs[0].type).toBe(EnemyType.MiniBoss);
+        });
+
+        // @verified 2026-04-18: uniqueName containing '_VETERAN_CHAMPION' does NOT trigger VETERAN heuristic - falls through to category.
+        test("synthetic: uniqueName '_VETERAN_CHAMPION' does not trigger VETERAN heuristic - uses category", () => {
+            // synthetic: VETERAN_CHAMPION exclusion ensures champion category wins.
+            spawnWithDbInfo(1010, {isHarvestable: false, category: 'champion', uniqueName: 'T6_MOB_KEEPER_VETERAN_CHAMPION', tier: 6});
+            const mobs = handler.getMobList();
+            expect(mobs).toHaveLength(1);
+            expect(mobs[0].type).toBe(EnemyType.EnchantedEnemy);
+        });
+
+        // @verified 2026-04-18: uniqueName containing '_ELITE' yields MiniBoss.
+        test("synthetic: uniqueName '_ELITE' -> EnemyType.MiniBoss", () => {
+            // synthetic: ELITE heuristic test.
+            spawnWithDbInfo(1011, {isHarvestable: false, category: 'static', uniqueName: 'T7_MOB_UNDEAD_ELITE', tier: 7});
+            const mobs = handler.getMobList();
+            expect(mobs).toHaveLength(1);
+            expect(mobs[0].type).toBe(EnemyType.MiniBoss);
+        });
+
+        // @verified 2026-04-18: uniqueName containing '_BOSS' (not MINIBOSS) yields Boss.
+        test("synthetic: uniqueName '_BOSS' (not MINIBOSS) -> EnemyType.Boss", () => {
+            // synthetic: BOSS heuristic test.
+            spawnWithDbInfo(1012, {isHarvestable: false, category: 'static', uniqueName: 'T8_MOB_DEMON_BOSS', tier: 8});
+            const mobs = handler.getMobList();
+            expect(mobs).toHaveLength(1);
+            expect(mobs[0].type).toBe(EnemyType.Boss);
+        });
+
+        // @verified 2026-04-18: uniqueName containing 'MINIBOSS' does NOT trigger BOSS heuristic.
+        test("synthetic: uniqueName 'MINIBOSS' does not trigger BOSS heuristic - uses category", () => {
+            // synthetic: MINIBOSS exclusion from BOSS heuristic.
+            spawnWithDbInfo(1013, {isHarvestable: false, category: 'miniboss', uniqueName: 'T6_MOB_KEEPER_MINIBOSS', tier: 6});
+            const mobs = handler.getMobList();
+            expect(mobs).toHaveLength(1);
+            expect(mobs[0].type).toBe(EnemyType.MiniBoss);
+        });
+    });
 });
