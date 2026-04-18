@@ -59,11 +59,20 @@ describe('ChestsHandler', () => {
             expect(handler.chestsList[0].chestName).toBe('override');
         });
 
-        // @suspect 2026-04-18: addChestEvent assumes Parameters[3] is always a string; crashes with TypeError when undefined. See CHEST-1.
-        test('synthetic: addChestEvent with Parameters[3]=undefined throws TypeError', () => {
+        // CHEST-1: pinned bug, addChestEvent crashes on undefined Parameters[3] because it calls toLowerCase() without a guard.
+        test.fails('pcap-derived spawn with Parameters[3]=undefined does not throw', () => {
             const p = {0: 99, 1: [0, 0], 3: undefined};
+            expect(() => handler.addChestEvent(p)).not.toThrow();
+        });
 
-            expect(() => handler.addChestEvent(p)).toThrow(TypeError);
+        // CHEST-2: pinned bug, handler stores chestName only and drops the rarity/type fields (Parameters[5], Parameters[18], Parameters[23]).
+        // Issue #29 reports drawing colour confusion; root cause at handler layer is that rarity is never persisted.
+        test.fails('pcap-derived spawn preserves Parameters[5] rarity on the stored Chest entity', async () => {
+            const fx = await loadFixture('chests', 'spawn');
+            const p = normalizeParams(fx.messages[0].parameters);
+            handler.addChestEvent(p);
+            const stored = handler.chestsList[0];
+            expect(stored.rarity).toBe(p[5]);
         });
     });
 
