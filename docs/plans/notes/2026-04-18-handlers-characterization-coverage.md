@@ -19,10 +19,10 @@ Living counter. Updated on every test commit. Archived at plan completion.
 | MobsHandler | 60 | 2 | 0 | 62 |
 | ChestsHandler | 10 | 0 | 1 | 11 |
 | FishingHandler | 8 | 0 | 2 | 10 |
-| DungeonsHandler | 0 | 0 | 0 | 0 |
-| WispCageHandler | 0 | 0 | 0 | 0 |
+| DungeonsHandler | 19 | 0 | 0 | 19 |
+| WispCageHandler | 9 | 0 | 0 | 9 |
 | EventRouter | 11 (PR #51) | 0 | 0 | 11 |
-| **Total** | **168** | **7** | **6** | **181** |
+| **Total** | **196** | **7** | **6** | **209** |
 
 ## Open `@suspect` register
 
