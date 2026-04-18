@@ -15,14 +15,14 @@ Living counter. Updated on every test commit. Archived at plan completion.
 | Handler | `@verified` | `@characterization` | `@suspect` | Total |
 |---|---:|---:|---:|---:|
 | PlayersHandler | 0 | 0 | 0 | 0 |
-| HarvestablesHandler | 1 | 0 | 1 | 2 |
+| HarvestablesHandler | 42 | 3 | 1 | 46 |
 | MobsHandler | 0 | 0 | 0 | 0 |
 | ChestsHandler | 0 | 0 | 0 | 0 |
 | FishingHandler | 0 | 0 | 0 | 0 |
 | DungeonsHandler | 0 | 0 | 0 | 0 |
 | WispCageHandler | 0 | 0 | 0 | 0 |
 | EventRouter | 11 (PR #51) | 0 | 0 | 11 |
-| **Total** | **12** | **0** | **1** | **13** |
+| **Total** | **53** | **3** | **1** | **57** |
 
 ## Open `@suspect` register
 
