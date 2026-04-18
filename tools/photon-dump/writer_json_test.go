@@ -9,6 +9,30 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestWriteJSONFixture_NestedHashtableBecomesStringKeyed(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "fixture.json")
+
+	nested := map[interface{}]interface{}{
+		byte(5): int64(1),
+		byte(7): "ZONE",
+	}
+	messages := []FixtureMessage{
+		{Kind: "response", Parameters: map[string]any{"103": nested}},
+	}
+	require.NoError(t, writeJSONFixture(out, messages))
+
+	body, err := os.ReadFile(out)
+	require.NoError(t, err)
+	var decoded struct {
+		Messages []struct {
+			Parameters map[string]map[string]any `json:"parameters"`
+		} `json:"messages"`
+	}
+	require.NoError(t, json.Unmarshal(body, &decoded))
+	require.Equal(t, "ZONE", decoded.Messages[0].Parameters["103"]["7"])
+}
+
 func TestWriteJSONFixture_Shape(t *testing.T) {
 	dir := t.TempDir()
 	out := filepath.Join(dir, "sub", "fixture.json")
