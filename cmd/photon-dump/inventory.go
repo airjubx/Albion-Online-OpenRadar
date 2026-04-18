@@ -10,14 +10,27 @@ import (
 )
 
 func runInventory(in, outPath string) error {
-	events := map[byte]int{}
-	requests := map[byte]int{}
-	responses := map[byte]int{}
+	// Albion wraps its protocol-level code in Parameters[252] for events and
+	// Parameters[253] for requests/responses. The raw Photon wire Code byte is
+	// typically a small constant (1/3) and not the Albion event code we care
+	// about. Mirror the convention from internal/photon/live_pcap_test.go.
+	events := map[int]int{}
+	requests := map[int]int{}
+	responses := map[int]int{}
 
 	parser := photon.NewPhotonParser(
-		func(e *photon.EventData) { events[e.Code]++ },
-		func(r *photon.OperationRequest) { requests[r.OperationCode]++ },
-		func(r *photon.OperationResponse) { responses[r.OperationCode]++ },
+		func(e *photon.EventData) {
+			photon.PostProcessEvent(e)
+			events[intFromParam(e.Parameters[252])]++
+		},
+		func(r *photon.OperationRequest) {
+			photon.PostProcessRequest(r)
+			requests[intFromParam(r.Parameters[253])]++
+		},
+		func(r *photon.OperationResponse) {
+			photon.PostProcessResponse(r)
+			responses[intFromParam(r.Parameters[253])]++
+		},
 	)
 
 	if err := iteratePcap(in, func(payload []byte) error {
@@ -37,16 +50,32 @@ func runInventory(in, outPath string) error {
 	return os.WriteFile(outPath, []byte(sb.String()), 0o644)
 }
 
-func writeCensusSection(sb *strings.Builder, title string, m map[byte]int) {
+func writeCensusSection(sb *strings.Builder, title string, m map[int]int) {
 	sb.WriteString("## " + title + "\n\n")
 	sb.WriteString("| Code | Count |\n|---:|---:|\n")
 	keys := make([]int, 0, len(m))
 	for k := range m {
-		keys = append(keys, int(k))
+		keys = append(keys, k)
 	}
 	sort.Ints(keys)
 	for _, k := range keys {
-		sb.WriteString(fmt.Sprintf("| %d | %d |\n", k, m[byte(k)]))
+		sb.WriteString(fmt.Sprintf("| %d | %d |\n", k, m[k]))
 	}
 	sb.WriteString("\n")
+}
+
+func intFromParam(v interface{}) int {
+	switch x := v.(type) {
+	case byte:
+		return int(x)
+	case int8:
+		return int(x)
+	case int16:
+		return int(x)
+	case int32:
+		return int(x)
+	case int64:
+		return int(x)
+	}
+	return -1
 }
