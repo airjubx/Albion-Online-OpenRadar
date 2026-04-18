@@ -71,14 +71,14 @@ Issues pinned by regression tests: #25, #29 (root), #30, #32, #36, #53 (8 codes)
 
 ## Handoffs to follow-up plans
 
-- `docs/plans/2026-04-18-protocol18-regressions-design.md` — fixtures already present. ROUTER-1 is the regression pin for #57. HARV-1 overlaps with #52 diagnostics.
-- `docs/plans/2026-04-18-alerts-and-ignore-list-design.md` — PLAY-1 (#65) and PLAY-2 (#36) are the regression pins. Fix flips them to verified. Secondary alert path at `triggerHostileAlert` (lines 271-295) must be covered.
-- `docs/plans/2026-01-15-living-harvestables-fix-design.md` — HARV-2 pins #30/#32. Fix flips to verified.
-- Issue #29 — CHEST-2 pins the handler-layer root cause (rarity discarded). Drawing-layer colour resolution is downstream.
-- Issue #25 — FISH-1 narrows to one-line fix in the falsy-guard.
-- Issue #53 — ROUTER-2 through ROUTER-9 (eight dispatch codes) will flip to verified when `EventCodes.js` is refreshed. Until then, five production handlers are dead on those event types: Dungeons, Chests, Fishing zones and finished, Mounted, WispCage spawn and opened, faction change.
-- Issue #54 — `docs/technical/PROTOCOL18_OBSERVED_CODES.md` contributes inventory from the 2026-04-18 capture.
-- Issue #58 (typeId overlay) — prerequisite to resolve #52 direction. Until overlay exists, the HarvestablesHandler vs MobsHandler tier divergence stays as a `@characterization` observation.
+- `docs/plans/2026-04-18-protocol18-regressions-design.md` , fixtures already present. ROUTER-1 is the regression pin for #57. HARV-1 overlaps with #52 diagnostics.
+- `docs/plans/2026-04-18-alerts-and-ignore-list-design.md` , PLAY-1 (#65) and PLAY-2 (#36) are the regression pins. Fix flips them to verified. Secondary alert path at `triggerHostileAlert` (lines 271-295) must be covered.
+- `docs/plans/2026-01-15-living-harvestables-fix-design.md` , HARV-2 pins #30/#32. Fix flips to verified.
+- Issue #29 , CHEST-2 pins the handler-layer root cause (rarity discarded). Drawing-layer colour resolution is downstream.
+- Issue #25 , FISH-1 narrows to one-line fix in the falsy-guard.
+- Issue #53 , ROUTER-2 through ROUTER-9 (eight dispatch codes) will flip to verified when `EventCodes.js` is refreshed. Until then, five production handlers are dead on those event types: Dungeons, Chests, Fishing zones and finished, Mounted, WispCage spawn and opened, faction change.
+- Issue #54 , `docs/technical/PROTOCOL18_OBSERVED_CODES.md` contributes inventory from the 2026-04-18 capture.
+- Issue #58 (typeId overlay) , prerequisite to resolve #52 direction. Until overlay exists, the HarvestablesHandler vs MobsHandler tier divergence stays as a `@characterization` observation.
 
 ## Notes for the next run
 
