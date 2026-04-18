@@ -1,16 +1,14 @@
 import {describe, test, expect, beforeEach, vi} from 'vitest';
 import {loadFixture, normalizeParams} from '../__fixtures__/loader.js';
+import {installRealDatabasesOnWindow} from '../__fixtures__/realDatabases.js';
+
+// pcap-derived: fixture corpus from 25-minute anonymized capture
+// synthetic: constructed parameters with no pcap origin
 
 vi.mock('../utils/SettingsSync.js', () => ({
     default: {
         getBool: vi.fn(() => true),
-        getJSON: vi.fn(() => ({
-            e0: Array(8).fill(true),
-            e1: Array(8).fill(true),
-            e2: Array(8).fill(true),
-            e3: Array(8).fill(true),
-            e4: Array(8).fill(true),
-        })),
+        getJSON: vi.fn(),
     },
 }));
 
@@ -25,33 +23,16 @@ const allTrueSettings = {
     e4: Array(8).fill(true),
 };
 
-// Standard mob database entries matching the pcap fixture typeIds.
-function makeDb(overrides = {}) {
-    return {
-        isLoaded: true,
-        getMobInfo: vi.fn((typeId) => {
-            if (overrides[typeId] !== undefined) return overrides[typeId];
-            if (typeId === 422) return {isHarvestable: true, type: 'Hide', tier: 2, uniqueName: 'T2_MOB_FOX'};
-            if (typeId === 424 || typeId === 428) return {isHarvestable: true, type: 'Hide', tier: 3, uniqueName: 'T3_MOB_WOLF'};
-            if (typeId === 529 || typeId === 531) return {isHarvestable: true, type: 'Hide', tier: 4, uniqueName: 'T4_MOB_BEAR'};
-            if (typeId === 2067 || typeId === 2070 || typeId === 2082 || typeId === 2085) {
-                return {isHarvestable: false, category: 'standard', uniqueName: 'T6_MOB_UNDEAD', tier: 6};
-            }
-            return null;
-        }),
-    };
-}
-
 describe('MobsHandler', () => {
     let handler;
+    let dbs;
 
     beforeEach(() => {
         vi.clearAllMocks();
+        window.logger = {debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn()};
+        dbs = installRealDatabasesOnWindow();
         settingsSync.getJSON.mockReturnValue(allTrueSettings);
         settingsSync.getBool.mockReturnValue(true);
-
-        window.logger = {debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn()};
-        window.mobsDatabase = makeDb();
         handler = new MobsHandler();
     });
 
@@ -74,7 +55,8 @@ describe('MobsHandler', () => {
             expect(sizes.mobs).toBe(0);
         });
 
-        // @verified 2026-04-18: living mob with known typeId=424 adds to mobsList as LivingSkinnable (Hide).
+        // @verified 2026-04-18: living Hide mob typeId=424 (T3_MOB_DYNAMIC_HIDE_SWAMP_GIANTTOAD, real DB lt=3).
+        // Real DB: type=Hide, tier=3, isHarvestable=true -> LivingSkinnable.
         test('pcap-derived spawn: living Hide mob typeId=424 adds as LivingSkinnable', async () => {
             const fx = await loadFixture('mobs', 'spawn');
             const msg = fx.messages.find(m => m.parameters['1'] === 424);
@@ -87,21 +69,24 @@ describe('MobsHandler', () => {
             expect(mobs).toHaveLength(1);
             expect(mobs[0].type).toBe(EnemyType.LivingSkinnable);
             expect(mobs[0].name).toBe('Hide');
+            expect(mobs[0].tier).toBe(3);
         });
 
-        // @verified 2026-04-18: typeId=428 also resolves as Hide/LivingSkinnable via the same db entry.
-        test('pcap-derived spawn: living Hide mob typeId=428 adds as LivingSkinnable', async () => {
-            // synthetic: typeId=428 is in the db fixture map, but no raw message with [1]=428 exists in spawn.json
+        // @verified 2026-04-18: typeId=428 (T5_MOB_DYNAMIC_HIDE_SWAMP_GIANTSNAKE, real DB lt=5).
+        // Real DB: type=Hide, tier=5, isHarvestable=true -> LivingSkinnable.
+        test('synthetic: living Hide mob typeId=428 adds as LivingSkinnable with tier=5', () => {
+            // synthetic: no raw message with param[1]=428 in spawn fixture; tests real DB path for this typeId.
             const p = normalizeParams({'0': 9000, '1': 428, '2': 255, '7': [0, 0], '13': 856, '19': 90, '33': 0});
-            // @characterization 2026-04-18: current code treats any 'Hide' db entry as LivingSkinnable
             handler.NewMobEvent(p);
             const mobs = handler.getMobList();
             expect(mobs).toHaveLength(1);
             expect(mobs[0].type).toBe(EnemyType.LivingSkinnable);
+            expect(mobs[0].tier).toBe(5);
         });
 
-        // @verified 2026-04-18: typeId=422 (tier 2 Hide) adds as LivingSkinnable.
-        test('pcap-derived spawn: living Hide mob typeId=422 tier 2 adds as LivingSkinnable', async () => {
+        // @verified 2026-04-18: typeId=422 (T2_MOB_HIDE_SWAMP_SNAKE, real DB lt=2).
+        // Real DB: type=Hide, tier=2, isHarvestable=true -> LivingSkinnable.
+        test('pcap-derived spawn: living Hide mob typeId=422 tier=2 adds as LivingSkinnable', async () => {
             const fx = await loadFixture('mobs', 'spawn');
             const msg = fx.messages.find(m => m.parameters['1'] === 422);
             expect(msg).toBeDefined();
@@ -115,8 +100,11 @@ describe('MobsHandler', () => {
             expect(mobs[0].tier).toBe(2);
         });
 
-        // @verified 2026-04-18: typeId=529 (tier 4 Hide) adds as LivingSkinnable.
-        test('pcap-derived spawn: living Hide mob typeId=529 tier 4 adds as LivingSkinnable', async () => {
+        // @characterization 2026-04-18: typeId=529 (T4_MOB_CRITTER_FIBER_SWAMP_GREEN, real DB lt=4, type=Fiber).
+        // Real DB: l=FIBER_CRITTER, type=Fiber, tier=4, isHarvestable=true.
+        // Handler classifies: type !== 'Hide' -> LivingHarvestable (not LivingSkinnable).
+        // Previous mock wrongly returned type='Hide', causing wrong LivingSkinnable classification.
+        test('pcap-derived spawn: Fiber critter typeId=529 adds as LivingHarvestable with tier=4', async () => {
             const fx = await loadFixture('mobs', 'spawn');
             const msg = fx.messages.find(m => m.parameters['1'] === 529);
             expect(msg).toBeDefined();
@@ -126,12 +114,16 @@ describe('MobsHandler', () => {
 
             const mobs = handler.getMobList();
             expect(mobs).toHaveLength(1);
-            expect(mobs[0].type).toBe(EnemyType.LivingSkinnable);
+            expect(mobs[0].type).toBe(EnemyType.LivingHarvestable);
+            expect(mobs[0].name).toBe('Fiber');
             expect(mobs[0].tier).toBe(4);
         });
 
-        // @verified 2026-04-18: typeId=531 (tier 4 Hide) adds as LivingSkinnable.
-        test('pcap-derived spawn: living Hide mob typeId=531 tier 4 adds as LivingSkinnable', async () => {
+        // @characterization 2026-04-18: typeId=531 (T5_MOB_CRITTER_FIBER_SWAMP_RED, real DB lt=5, type=Fiber).
+        // Real DB: l=FIBER_CRITTER, type=Fiber, tier=5, isHarvestable=true.
+        // Handler classifies: type !== 'Hide' -> LivingHarvestable.
+        // Previous mock wrongly returned type='Hide', causing wrong LivingSkinnable classification.
+        test('pcap-derived spawn: Fiber critter typeId=531 adds as LivingHarvestable with tier=5', async () => {
             const fx = await loadFixture('mobs', 'spawn');
             const msg = fx.messages.find(m => m.parameters['1'] === 531);
             expect(msg).toBeDefined();
@@ -141,11 +133,14 @@ describe('MobsHandler', () => {
 
             const mobs = handler.getMobList();
             expect(mobs).toHaveLength(1);
-            expect(mobs[0].type).toBe(EnemyType.LivingSkinnable);
+            expect(mobs[0].type).toBe(EnemyType.LivingHarvestable);
+            expect(mobs[0].name).toBe('Fiber');
+            expect(mobs[0].tier).toBe(5);
         });
 
-        // @verified 2026-04-18: hostile standard mob (typeId=2067) adds as Enemy.
-        test('pcap-derived spawn: hostile mob typeId=2067 category=standard adds as Enemy', async () => {
+        // @verified 2026-04-18: hostile camp mob typeId=2067 (T5_MOB_ROAMING_KEEPER_CAMP_UNPROVEN_MALE).
+        // Real DB: l=SILVERCOINS (not harvestable), category=camp -> EnemyType.Enemy.
+        test('pcap-derived spawn: hostile mob typeId=2067 category=camp adds as Enemy', async () => {
             const fx = await loadFixture('mobs', 'spawn');
             const msg = fx.messages.find(m => m.parameters['1'] === 2067);
             expect(msg).toBeDefined();
@@ -158,7 +153,7 @@ describe('MobsHandler', () => {
             expect(mobs[0].type).toBe(EnemyType.Enemy);
         });
 
-        // @verified 2026-04-18: hostile standard mob typeId=2070 adds as Enemy.
+        // @verified 2026-04-18: typeId=2070 (T5_MOB_ROAMING_KEEPER_CAMP_BERSERK), camp -> Enemy.
         test('pcap-derived spawn: hostile mob typeId=2070 adds as Enemy', async () => {
             const fx = await loadFixture('mobs', 'spawn');
             const msg = fx.messages.find(m => m.parameters['1'] === 2070);
@@ -172,7 +167,7 @@ describe('MobsHandler', () => {
             expect(mobs[0].type).toBe(EnemyType.Enemy);
         });
 
-        // @verified 2026-04-18: hostile standard mob typeId=2082 adds as Enemy.
+        // @verified 2026-04-18: typeId=2082 (T5_MOB_ROAMING_KEEPER_CAMP_UNPROVEN_FEMALE), camp -> Enemy.
         test('pcap-derived spawn: hostile mob typeId=2082 adds as Enemy', async () => {
             const fx = await loadFixture('mobs', 'spawn');
             const msg = fx.messages.find(m => m.parameters['1'] === 2082);
@@ -186,7 +181,7 @@ describe('MobsHandler', () => {
             expect(mobs[0].type).toBe(EnemyType.Enemy);
         });
 
-        // @verified 2026-04-18: hostile standard mob typeId=2085 adds as Enemy.
+        // @verified 2026-04-18: typeId=2085 (T5_MOB_ROAMING_KEEPER_CAMP_AXE_THROWER), camp -> Enemy.
         test('pcap-derived spawn: hostile mob typeId=2085 adds as Enemy', async () => {
             const fx = await loadFixture('mobs', 'spawn');
             const msg = fx.messages.find(m => m.parameters['1'] === 2085);
@@ -200,9 +195,9 @@ describe('MobsHandler', () => {
             expect(mobs[0].type).toBe(EnemyType.Enemy);
         });
 
-        // @verified 2026-04-18: unknown typeId (no db entry) defaults to EnemyType.Enemy.
+        // @verified 2026-04-18: unknown typeId (out-of-range, no DB entry) defaults to EnemyType.Enemy.
         test('synthetic: unknown typeId with no db entry defaults to EnemyType.Enemy', () => {
-            // synthetic: no real pcap message with this typeId; tests the no-db-entry path.
+            // synthetic: typeId 9999 is out of range in mobs.min.json (len=4595); tests the no-db-entry path.
             const p = normalizeParams({'0': 8001, '1': 9999, '2': 255, '7': [0, 0], '13': 500, '33': 0});
             handler.NewMobEvent(p);
             const mobs = handler.getMobList();
@@ -212,7 +207,7 @@ describe('MobsHandler', () => {
 
         // @verified 2026-04-18: low healthNormalized < 10 is clamped to 255 at spawn.
         test('synthetic: spawn with parameters[2] < 10 clamps health to 255', () => {
-            // synthetic: tests the fortNPC low-HP-spawn fix branch in AddEnemy.
+            // synthetic: typeId 9999 is out of range; tests the fortNPC low-HP-spawn fix branch.
             const p = normalizeParams({'0': 8002, '1': 9999, '2': 5, '7': [0, 0], '13': 500, '33': 0});
             handler.NewMobEvent(p);
             const mobs = handler.getMobList();
@@ -222,7 +217,7 @@ describe('MobsHandler', () => {
 
         // @verified 2026-04-18: duplicate id second NewMobEvent is a no-op (first wins).
         test('synthetic: duplicate id second NewMobEvent does not duplicate entry', () => {
-            // synthetic: tests the early-return guard in AddEnemy.
+            // synthetic: typeId 9999 out of range; tests the early-return guard in AddEnemy.
             const p = normalizeParams({'0': 8003, '1': 9999, '2': 255, '7': [10, 20], '13': 500, '33': 0});
             handler.NewMobEvent(p);
             const p2 = normalizeParams({'0': 8003, '1': 9999, '2': 200, '7': [99, 99], '13': 500, '33': 0});
@@ -243,7 +238,7 @@ describe('MobsHandler', () => {
 
         // @verified 2026-04-18: settingNormalEnemy=false gates out identified Enemy-type mobs.
         test('synthetic: settingNormalEnemy=false prevents identified Enemy from being added', () => {
-            // synthetic: tests the settings gate for identified enemies.
+            // synthetic: typeId=2067 is a known camp mob -> Enemy; settingNormalEnemy=false blocks it.
             settingsSync.getBool.mockImplementation((key) => key !== 'settingNormalEnemy');
             const p = normalizeParams({'0': 8005, '1': 2067, '2': 255, '7': [0, 0], '13': 500, '33': 0});
             handler.NewMobEvent(p);
@@ -252,7 +247,7 @@ describe('MobsHandler', () => {
 
         // @verified 2026-04-18: settingShowUnmanagedEnemies=false gates out unknown (no-db) mobs.
         test('synthetic: settingShowUnmanagedEnemies=false prevents unknown mob from being added', () => {
-            // synthetic: tests the unmanaged enemies settings gate.
+            // synthetic: typeId=9999 out of range -> unknown mob; setting gates it out.
             settingsSync.getBool.mockImplementation((key) => key !== 'settingShowUnmanagedEnemies');
             const p = normalizeParams({'0': 8006, '1': 9999, '2': 255, '7': [0, 0], '13': 500, '33': 0});
             handler.NewMobEvent(p);
@@ -273,11 +268,12 @@ describe('MobsHandler', () => {
 
     // -------------------------------------------------------------------------
     // _getEnemyTypeFromCategory heuristics (all synthetic)
+    // Uses vi.spyOn to inject synthetic dbInfo without replacing the real DB.
     // -------------------------------------------------------------------------
 
     describe('_getEnemyTypeFromCategory heuristics', () => {
         function spawnWithDbInfo(id, dbInfo) {
-            window.mobsDatabase = makeDb({[id]: dbInfo});
+            vi.spyOn(dbs.mobsDatabase, 'getMobInfo').mockReturnValueOnce(dbInfo);
             const p = normalizeParams({'0': id, '1': id, '2': 255, '7': [0, 0], '13': 500, '33': 0});
             handler.NewMobEvent(p);
         }
@@ -336,7 +332,7 @@ describe('MobsHandler', () => {
             expect(mobs[0].type).toBe(EnemyType.EnchantedEnemy);
         });
 
-        // @verified 2026-04-18: category='standard' yields EnemyType.Enemy (representative normal tier).
+        // @verified 2026-04-18: category='standard' yields EnemyType.Enemy.
         test("synthetic: category='standard' -> EnemyType.Enemy", () => {
             // synthetic: representative normal-tier path test.
             spawnWithDbInfo(1007, {isHarvestable: false, category: 'standard', uniqueName: 'T4_MOB_KEEPER', tier: 4});
@@ -356,14 +352,14 @@ describe('MobsHandler', () => {
 
         // @verified 2026-04-18: uniqueName containing '_VETERAN' (not VETERAN_CHAMPION) yields MiniBoss regardless of category.
         test("synthetic: uniqueName '_VETERAN' (not VETERAN_CHAMPION) -> EnemyType.MiniBoss overrides category", () => {
-            // synthetic: heuristic override - VETERAN name in a static category mob.
+            // synthetic: VETERAN name in a static category mob.
             spawnWithDbInfo(1009, {isHarvestable: false, category: 'static', uniqueName: 'T6_MOB_MORGANA_CROSSBOWMAN_VETERAN', tier: 6});
             const mobs = handler.getMobList();
             expect(mobs).toHaveLength(1);
             expect(mobs[0].type).toBe(EnemyType.MiniBoss);
         });
 
-        // @verified 2026-04-18: uniqueName containing '_VETERAN_CHAMPION' does NOT trigger VETERAN heuristic - falls through to category.
+        // @verified 2026-04-18: uniqueName containing '_VETERAN_CHAMPION' does NOT trigger VETERAN heuristic.
         test("synthetic: uniqueName '_VETERAN_CHAMPION' does not trigger VETERAN heuristic - uses category", () => {
             // synthetic: VETERAN_CHAMPION exclusion ensures champion category wins.
             spawnWithDbInfo(1010, {isHarvestable: false, category: 'champion', uniqueName: 'T6_MOB_KEEPER_VETERAN_CHAMPION', tier: 6});
@@ -406,7 +402,8 @@ describe('MobsHandler', () => {
 
     describe('updateMobHealth (event 6)', () => {
         function addMob(id, maxHealth = 500) {
-            window.mobsDatabase = makeDb({[id]: {isHarvestable: false, category: 'standard', uniqueName: 'MOB', tier: 4}});
+            // synthetic typeIds in range 5001+ are out of range in real DB -> null -> unmanaged Enemy.
+            vi.spyOn(dbs.mobsDatabase, 'getMobInfo').mockReturnValueOnce(null);
             handler.NewMobEvent(normalizeParams({'0': id, '1': id, '2': 200, '7': [0, 0], '13': maxHealth, '33': 0}));
         }
 
@@ -445,7 +442,7 @@ describe('MobsHandler', () => {
 
     describe('updateMobHealthRegen (event 91)', () => {
         function addMob(id) {
-            window.mobsDatabase = makeDb({[id]: {isHarvestable: false, category: 'standard', uniqueName: 'MOB', tier: 4}});
+            vi.spyOn(dbs.mobsDatabase, 'getMobInfo').mockReturnValueOnce(null);
             handler.NewMobEvent(normalizeParams({'0': id, '1': id, '2': 200, '7': [0, 0], '13': 500, '33': 0}));
         }
 
@@ -468,7 +465,7 @@ describe('MobsHandler', () => {
 
     describe('updateMobHealthBulk (event 7)', () => {
         function addMob(id, maxHealth = 500) {
-            window.mobsDatabase = makeDb({[id]: {isHarvestable: false, category: 'standard', uniqueName: 'MOB', tier: 4}});
+            vi.spyOn(dbs.mobsDatabase, 'getMobInfo').mockReturnValueOnce(null);
             handler.NewMobEvent(normalizeParams({'0': id, '1': id, '2': 200, '7': [0, 0], '13': maxHealth, '33': 0}));
         }
 
@@ -505,7 +502,7 @@ describe('MobsHandler', () => {
 
     describe('position updates', () => {
         function addMob(id) {
-            window.mobsDatabase = makeDb({[id]: {isHarvestable: false, category: 'standard', uniqueName: 'MOB', tier: 4}});
+            vi.spyOn(dbs.mobsDatabase, 'getMobInfo').mockReturnValueOnce(null);
             handler.NewMobEvent(normalizeParams({'0': id, '1': id, '2': 200, '7': [0, 0], '13': 500, '33': 0}));
         }
 
@@ -555,7 +552,7 @@ describe('MobsHandler', () => {
 
     describe('enchant updates', () => {
         function addMob(id) {
-            window.mobsDatabase = makeDb({[id]: {isHarvestable: false, category: 'standard', uniqueName: 'MOB', tier: 4}});
+            vi.spyOn(dbs.mobsDatabase, 'getMobInfo').mockReturnValueOnce(null);
             handler.NewMobEvent(normalizeParams({'0': id, '1': id, '2': 200, '7': [0, 0], '13': 500, '33': 0}));
         }
 
@@ -601,7 +598,7 @@ describe('MobsHandler', () => {
 
     describe('lifecycle', () => {
         function addMob(id) {
-            window.mobsDatabase = makeDb({[id]: {isHarvestable: false, category: 'standard', uniqueName: 'MOB', tier: 4}});
+            vi.spyOn(dbs.mobsDatabase, 'getMobInfo').mockReturnValueOnce(null);
             handler.NewMobEvent(normalizeParams({'0': id, '1': id, '2': 200, '7': [0, 0], '13': 500, '33': 0}));
         }
 
@@ -678,7 +675,7 @@ describe('MobsHandler', () => {
 
     describe('cleanupStaleEntities', () => {
         function addMob(id) {
-            window.mobsDatabase = makeDb({[id]: {isHarvestable: false, category: 'standard', uniqueName: 'MOB', tier: 4}});
+            vi.spyOn(dbs.mobsDatabase, 'getMobInfo').mockReturnValueOnce(null);
             handler.NewMobEvent(normalizeParams({'0': id, '1': id, '2': 200, '7': [0, 0], '13': 500, '33': 0}));
         }
 
@@ -724,9 +721,9 @@ describe('MobsHandler', () => {
     describe('enforceMaxSize', () => {
         // @verified 2026-04-18: enforceMaxSize trims mobsList to maxMobs keeping newest entries.
         test('synthetic: enforceMaxSize trims mobs to maxMobs, keeping newest', () => {
-            // synthetic: adds 5 mobs then trims to 3.
+            // synthetic: adds 5 mobs then trims to 3; typeIds 9100-9104 are out of range in real DB.
             for (let i = 0; i < 5; i++) {
-                window.mobsDatabase = makeDb({[9100 + i]: {isHarvestable: false, category: 'standard', uniqueName: 'MOB', tier: 4}});
+                vi.spyOn(dbs.mobsDatabase, 'getMobInfo').mockReturnValueOnce(null);
                 handler.NewMobEvent(normalizeParams({'0': 9100 + i, '1': 9100 + i, '2': 200, '7': [0, 0], '13': 500, '33': 0}));
                 handler.mobsList[i].lastUpdateTime = Date.now() + i * 1000;
             }
@@ -750,8 +747,8 @@ describe('MobsHandler', () => {
 
         // @verified 2026-04-18: enforceMaxSize returns 0 when under limits.
         test('synthetic: enforceMaxSize returns 0 when counts are under limits', () => {
-            // synthetic: happy path - nothing trimmed.
-            window.mobsDatabase = makeDb({9300: {isHarvestable: false, category: 'standard', uniqueName: 'MOB', tier: 4}});
+            // synthetic: happy path - nothing trimmed; typeId 9300 is out of range.
+            vi.spyOn(dbs.mobsDatabase, 'getMobInfo').mockReturnValueOnce(null);
             handler.NewMobEvent(normalizeParams({'0': 9300, '1': 9300, '2': 200, '7': [0, 0], '13': 500, '33': 0}));
             expect(handler.enforceMaxSize(500, 50)).toBe(0);
         });
