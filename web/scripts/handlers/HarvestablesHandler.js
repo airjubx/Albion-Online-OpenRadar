@@ -157,12 +157,11 @@ export class HarvestablesHandler
 
     addHarvestable(id, type, tier, posX, posY, charges, size, mobileTypeId = null)
     {
-        // 🔍 Determine resource type: living (animals/creatures) vs static
-        // CORRECTED LOGIC (2025-12-09):
-        // - mobileTypeId === 65535 → STATIC enchanted resource (no creature, just a node)
-        // - mobileTypeId === null → STATIC resource from Event 38 (batch spawn)
-        // - mobileTypeId === real TypeID (425, 530, etc.) → LIVING creature (animal that drops resource)
-        const isLiving = mobileTypeId !== null && mobileTypeId !== 65535;
+        // Determine resource type: living (animals/creatures) vs static.
+        // - mobileTypeId === 65535 or -1 : STATIC (both are int16 decodes of 0xFFFF).
+        // - mobileTypeId === null        : STATIC from Event 38 batch spawn.
+        // - mobileTypeId === real TypeID : LIVING creature.
+        const isLiving = mobileTypeId !== null && mobileTypeId !== 65535 && mobileTypeId !== -1;
 
         // Get resource type string
         // Living resources: use MobsDatabase (typeNumber is WRONG for living!)
@@ -238,12 +237,8 @@ export class HarvestablesHandler
 
     UpdateHarvestable(id, type, tier, posX, posY, charges, size, mobileTypeId = null)
     {
-        // 🔍 Determine resource type: living (animals/creatures) vs static
-        // CORRECTED LOGIC (2025-12-09):
-        // - mobileTypeId === 65535 → STATIC enchanted resource (no creature, just a node)
-        // - mobileTypeId === null → STATIC resource from Event 38 (batch spawn)
-        // - mobileTypeId === real TypeID (425, 530, etc.) → LIVING creature (animal that drops resource)
-        const isLiving = mobileTypeId !== null && mobileTypeId !== 65535;
+        // Guard identical to addHarvestable: -1, 65535, null all mean STATIC.
+        const isLiving = mobileTypeId !== null && mobileTypeId !== 65535 && mobileTypeId !== -1;
 
         // Get resource type string
         // Living resources: use MobsDatabase (typeNumber is WRONG for living!)
@@ -407,8 +402,7 @@ export class HarvestablesHandler
             enchant,
             size,
             mobileTypeId,
-            // CORRECTED: 65535 = static, real TypeID = living
-            isLiving: mobileTypeId !== null && mobileTypeId !== 65535,
+            isLiving: mobileTypeId !== null && mobileTypeId !== 65535 && mobileTypeId !== -1,
             allParametersKeys: Object.keys(Parameters),
             allParameters: allParams40
         });
