@@ -30,8 +30,8 @@ const (
 	evtFishingFinished      = 356
 	evtNewFishingZone       = 359
 	evtNewLootChest         = 391
-	evtNewCagedObject       = 530
-	evtCagedObjectUpdate    = 531
+	evtNewCagedObject       = 531
+	evtCagedObjectUpdate    = 532
 
 	opMoveRequest   = 22
 	opJoinFinished  = 2
