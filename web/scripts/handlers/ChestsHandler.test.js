@@ -59,8 +59,8 @@ describe('ChestsHandler', () => {
             expect(handler.chestsList[0].chestName).toBe('override');
         });
 
-        // CHEST-1: pinned bug, addChestEvent crashes on undefined Parameters[3] because it calls toLowerCase() without a guard.
-        test.fails('pcap-derived spawn with Parameters[3]=undefined does not throw', () => {
+        // @verified 2026-04-19: addChestEvent guards typeof Parameters[3] before toLowerCase; undefined no longer throws.
+        test('synthetic: addChestEvent with Parameters[3]=undefined does not throw', () => {
             const p = {0: 99, 1: [0, 0], 3: undefined};
             expect(() => handler.addChestEvent(p)).not.toThrow();
         });

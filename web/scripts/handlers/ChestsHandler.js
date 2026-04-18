@@ -72,7 +72,7 @@ export class ChestsHandler {
         const chestsPosition = Parameters[1];
         let chestName = Parameters[3];
 
-        if (chestName.toLowerCase().includes("mist")) {
+        if (typeof chestName === 'string' && chestName.toLowerCase().includes("mist")) {
             chestName = Parameters[4];
         }
         this.addChest(chestId, chestsPosition[0], chestsPosition[1], chestName);
