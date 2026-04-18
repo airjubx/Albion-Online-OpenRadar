@@ -23,8 +23,8 @@ Living counter. Updated on every test commit. Archived at plan completion.
 | FishingHandler | 8 | 0 | 2 | 10 |
 | DungeonsHandler | 19 | 0 | 0 | 19 |
 | WispCageHandler | 9 | 0 | 0 | 9 |
-| EventRouter | 36 | 12 | 1 | 49 |
-| **Total** | **221** | **26** | **9** | **254** |
+| EventRouter | 36 | 0 | 11 | 47 |
+| **Total** | **221** | **14** | **19** | **254** |
 
 ## Open `test.fails` register
 
@@ -36,7 +36,23 @@ Living counter. Updated on every test commit. Archived at plan completion.
 - **CHEST-1** ChestsHandler.addChestEvent assumes Parameters[3] is always a string; crashes with TypeError when undefined. Pinned by `synthetic: addChestEvent with Parameters[3]=undefined throws TypeError` in `ChestsHandler.test.js`.
 - **FISH-1** (issue #25) FishingHandler.newFishEvent drops events where Parameters[4] is an empty string `""` because `!type` treats `""` as falsy. In the pcap corpus 3 of 5 spawn events carry `type=""` with valid coordinates and are silently discarded. Likely root of fishpool not showing. Pinned by `pcap-derived spawn: entries with type="" are dropped by !type guard` in `FishingHandler.test.js`. Fix candidate: replace `!type` with `type === null || type === undefined`.
 
-- **ROUTER-1** (issue #57) EventRouter.onResponse opcode 2 (JoinMap) does not extract `isBZ` from `Parameters[103]` hashtable. Post-Protocol18 the field is `{"5": ..., "7": ...}` (non-zero). Current code leaves `map.isBZ` at its prior value. Pinned by `@suspect ROUTER-1: isBZ not derived from params[103] hashtable in JoinMap response` in `EventRouter.test.js`. Fix design: `2026-04-18-protocol18-regressions-design.md`.
+- **ROUTER-1** (issue #57) EventRouter.onResponse opcode 2 (JoinMap) does not extract `isBZ` from `Parameters[103]` hashtable. Post-Protocol18 the field is `{"5": ..., "7": ...}` (non-zero). Current code leaves `map.isBZ` at its prior value. Pinned by `test.fails('ROUTER-1: onResponse JoinMap extracts isBZ from params[103] hashtable')` in `EventRouter.test.js`. Fix design: `2026-04-18-protocol18-regressions-design.md`.
+
+- **ROUTER-2** (issue #53) EventCodes.ChangeFlaggingFinished stale (local 359, real 363). Router case 359 never fires for real game events carrying P[252]=363. Pinned by two `test.fails` in `EventRouter.test.js`. Will flip to pass when `EventCodes.js` is refreshed.
+
+- **ROUTER-3** (issue #53) EventCodes.Mounted stale (local 209, real 211). Router case 209 never fires for real game events carrying P[252]=211. Pinned by `test.fails` in `EventRouter.test.js`.
+
+- **ROUTER-4** (issue #53) EventCodes.NewRandomDungeonExit stale (local 319, real 323). Router case 319 never fires for real game events carrying P[252]=323. Pinned by `test.fails` in `EventRouter.test.js`.
+
+- **ROUTER-5** (issue #53) EventCodes.NewLootChest stale (local 387, real 391). Router case 387 never fires for real game events carrying P[252]=391. Pinned by `test.fails` in `EventRouter.test.js`.
+
+- **ROUTER-6** (issue #53) EventCodes.NewFishingZoneObject stale (local 355, real 359). Router case 355 never fires for real game events carrying P[252]=359. Pinned by two `test.fails` in `EventRouter.test.js`.
+
+- **ROUTER-7** (issue #53) EventCodes.FishingFinished stale (local 352, real 356). Router case 352 never fires for real game events carrying P[252]=356. Pinned by `test.fails` in `EventRouter.test.js`.
+
+- **ROUTER-8** (issue #53) EventCodes.NewCagedObject stale (local 525, upstream 531). Router case 525 never fires for real game events carrying P[252]=531. Pinned by `test.fails` in `EventRouter.test.js`.
+
+- **ROUTER-9** (issue #53) EventCodes.CagedObjectStateUpdated stale (local 526, upstream 532). Router case 526 never fires for real game events carrying P[252]=532. Pinned by `test.fails` in `EventRouter.test.js`.
 
 ## Decisions log
 

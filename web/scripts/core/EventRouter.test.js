@@ -185,25 +185,19 @@ describe('EventRouter', () => {
             expect(clearHandlers).toHaveBeenCalledTimes(1);
         });
 
-        // @suspect 2026-04-18 ROUTER-1: isBZ not extracted from params[103] hashtable
-        // Current code ignores params[103] entirely in the JoinMap branch.
-        // params[103] = {"5": 1409813048, "7": 56653070} is a non-zero hashtable
-        // (post-Protocol18 format). map.isBZ stays at its prior value.
-        // Cross-link: issue #57. Fix design: 2026-04-18-protocol18-regressions-design.md.
-        test('@suspect ROUTER-1: isBZ not derived from params[103] hashtable in JoinMap response', async () => {
+        // Pinned: ROUTER-1 (issue #57). EventRouter.onResponse opcode 2 does not extract isBZ from
+        // params[103] hashtable. Post-Protocol18: {"5": 1409813048, "7": 56653070} is non-zero.
+        // Fix design: 2026-04-18-protocol18-regressions-design.md.
+        test.fails('ROUTER-1: onResponse JoinMap extracts isBZ from params[103] hashtable', async () => {
             // pcap-derived: router/join-finished.json message[0]
-            // params[103] = {"5": 1409813048, "7": 56653070} - non-zero, so zone may be BZ
+            // params[103] = {"5": 1409813048, "7": 56653070}
             const fix = await loadFixture('router', 'join-finished');
-            const msg = fix.messages[0];
-            const p = normalizeParams(msg.parameters);
+            const p = normalizeParams(fix.messages[0].parameters);
 
-            const priorIsBZ = map.isBZ; // false from beforeEach
             EventRouter.onResponse(p, clearHandlers);
 
-            // Current broken behavior: isBZ is NOT updated from params[103].
-            // It retains whatever value it had before (false).
-            expect(map.isBZ).toBe(priorIsBZ);
-            // When fixed, map.isBZ should reflect the params[103] hashtable content.
+            // When fixed, map.isBZ must reflect the non-zero hashtable (true or derived value).
+            expect(map.isBZ).not.toBe(false);
         });
 
         // @verified 2026-04-18: second pcap JoinFinished message updates position from array
@@ -405,26 +399,26 @@ describe('EventRouter', () => {
     // onEvent ChangeFlaggingFinished (359 local / 363 upstream)
     // -------------------------------------------------------------------------
     describe('onEvent ChangeFlaggingFinished', () => {
-        // @characterization 2026-04-18: local EventCodes.ChangeFlaggingFinished=359 but fixture carries 363.
-        // Router dispatches on 359. Tests use the constant so they track the dispatch contract,
-        // not the fixture wire value. Cross-link: issue #53.
-        test('ChangeFlaggingFinished: dispatches updatePlayerFaction with params[0] and params[1]', () => {
-            // synthetic with local constant + pcap-observed id/faction values (9822, faction=5)
-            const p = {0: 9822, 1: 5, 252: EventCodes.ChangeFlaggingFinished};
+        // Pinned: EventCodes.ChangeFlaggingFinished is stale (local 359, real 363). Dispatch fails until EventCodes.js is refreshed (#53).
+        test.fails('onEvent routes ChangeFlaggingFinished (P[252]=363) to playersHandler.updatePlayerFaction', async () => {
+            // pcap-derived: players/faction-change.json message[0], P[252]=363
+            const fix = await loadFixture('players', 'faction-change');
+            const p = normalizeParams(fix.messages[0].parameters);
 
             EventRouter.onEvent(p);
 
-            expect(handlers.playersHandler.updatePlayerFaction).toHaveBeenCalledWith(9822, 5);
+            expect(handlers.playersHandler.updatePlayerFaction).toHaveBeenCalledWith(p[0], p[1]);
         });
 
-        // @characterization 2026-04-18: second pcap-observed id variant (10006)
-        test('ChangeFlaggingFinished: second id variant dispatches correctly', () => {
-            // synthetic with local constant + pcap-observed id 10006
-            const p = {0: 10006, 1: 5, 252: EventCodes.ChangeFlaggingFinished};
+        // Pinned: second pcap variant (different player id). Same stale dispatch. Cross-link: issue #53.
+        test.fails('onEvent routes ChangeFlaggingFinished second variant (P[252]=363) to updatePlayerFaction', async () => {
+            // pcap-derived: players/faction-change.json message[1], P[252]=363
+            const fix = await loadFixture('players', 'faction-change');
+            const p = normalizeParams(fix.messages[1].parameters);
 
             EventRouter.onEvent(p);
 
-            expect(handlers.playersHandler.updatePlayerFaction).toHaveBeenCalledWith(10006, 5);
+            expect(handlers.playersHandler.updatePlayerFaction).toHaveBeenCalledWith(p[0], p[1]);
         });
     });
 
@@ -432,17 +426,15 @@ describe('EventRouter', () => {
     // onEvent Mounted (209 local / 211 upstream)
     // -------------------------------------------------------------------------
     describe('onEvent Mounted', () => {
-        // @characterization 2026-04-18: current code dispatches on EventCodes.Mounted=209 (local stale value).
-        // Upstream (StatisticsAnalysis) assigns 211 to Mounted; the corpus fixture carries 252=211.
-        // The dispatch here uses the local constant so will break if EventCodes.js is corrected.
-        // Cross-link: issue #53 (EventCodes enum unification).
-        test('Mounted synthetic: dispatches handleMountedPlayerEvent using local EventCodes.Mounted constant', () => {
-            // synthetic: uses EventCodes.Mounted constant (209 locally) to match switch case
-            const p = {0: 6740, 252: EventCodes.Mounted, 1: 540863, 2: 2989};
+        // Pinned: EventCodes.Mounted is stale (local 209, real 211). Dispatch fails until EventCodes.js is refreshed (#53).
+        test.fails('onEvent routes Mounted (P[252]=211) to playersHandler.handleMountedPlayerEvent', async () => {
+            // pcap-derived: players/mounted.json message[0], P[252]=211
+            const fix = await loadFixture('players', 'mounted');
+            const p = normalizeParams(fix.messages[0].parameters);
 
             EventRouter.onEvent(p);
 
-            expect(handlers.playersHandler.handleMountedPlayerEvent).toHaveBeenCalledWith(6740, p);
+            expect(handlers.playersHandler.handleMountedPlayerEvent).toHaveBeenCalledWith(p[0], p);
         });
     });
 
@@ -623,15 +615,11 @@ describe('EventRouter', () => {
     // onEvent NewRandomDungeonExit (319 local / 323 upstream)
     // -------------------------------------------------------------------------
     describe('onEvent NewRandomDungeonExit', () => {
-        // @characterization 2026-04-18: local EventCodes.NewRandomDungeonExit=319 but fixture carries 323.
-        // Router dispatches on 319. Test uses the constant with pcap-observed id and payload.
-        // Cross-link: issue #53.
-        test('NewRandomDungeonExit: dispatches dungeonEvent with full params', async () => {
-            // pcap-derived payload merged with local constant event code
+        // Pinned: EventCodes.NewRandomDungeonExit is stale (local 319, real 323). Dispatch fails until EventCodes.js is refreshed (#53).
+        test.fails('onEvent routes NewRandomDungeonExit (P[252]=323) to dungeonsHandler.dungeonEvent', async () => {
+            // pcap-derived: dungeons/spawn.json message[0], P[252]=323
             const fix = await loadFixture('dungeons', 'spawn');
-            const msg = fix.messages[0];
-            const p = normalizeParams(msg.parameters);
-            p[252] = EventCodes.NewRandomDungeonExit; // override stale fixture code
+            const p = normalizeParams(fix.messages[0].parameters);
 
             EventRouter.onEvent(p);
 
@@ -643,15 +631,11 @@ describe('EventRouter', () => {
     // onEvent NewLootChest (387 local / 391 upstream)
     // -------------------------------------------------------------------------
     describe('onEvent NewLootChest', () => {
-        // @characterization 2026-04-18: local EventCodes.NewLootChest=387 but fixture carries 391.
-        // Router dispatches on 387. Test overrides code with local constant.
-        // Cross-link: issue #53.
-        test('NewLootChest: dispatches addChestEvent with pcap-derived payload', async () => {
-            // pcap-derived payload; event code overridden to local constant
+        // Pinned: EventCodes.NewLootChest is stale (local 387, real 391). Dispatch fails until EventCodes.js is refreshed (#53).
+        test.fails('onEvent routes NewLootChest (P[252]=391) to chestsHandler.addChestEvent', async () => {
+            // pcap-derived: chests/spawn.json message[0], P[252]=391
             const fix = await loadFixture('chests', 'spawn');
-            const msg = fix.messages[0];
-            const p = normalizeParams(msg.parameters);
-            p[252] = EventCodes.NewLootChest; // override stale fixture code
+            const p = normalizeParams(fix.messages[0].parameters);
 
             EventRouter.onEvent(p);
 
@@ -663,28 +647,22 @@ describe('EventRouter', () => {
     // onEvent NewFishingZoneObject (355 local / 359 upstream)
     // -------------------------------------------------------------------------
     describe('onEvent NewFishingZoneObject', () => {
-        // @characterization 2026-04-18: local EventCodes.NewFishingZoneObject=355 but fixture carries 359.
-        // Router dispatches on 355. Tests override code with local constant.
-        // Cross-link: issue #53.
-        test('NewFishingZoneObject: dispatches newFishEvent with pcap-derived payload', async () => {
-            // pcap-derived payload; event code overridden to local constant
+        // Pinned: EventCodes.NewFishingZoneObject is stale (local 355, real 359). Dispatch fails until EventCodes.js is refreshed (#53).
+        test.fails('onEvent routes NewFishingZoneObject (P[252]=359) to fishingHandler.newFishEvent', async () => {
+            // pcap-derived: fishing/spawn.json message[0], P[252]=359
             const fix = await loadFixture('fishing', 'spawn');
-            const msg = fix.messages[0];
-            const p = normalizeParams(msg.parameters);
-            p[252] = EventCodes.NewFishingZoneObject; // override stale fixture code
+            const p = normalizeParams(fix.messages[0].parameters);
 
             EventRouter.onEvent(p);
 
             expect(handlers.fishingHandler.newFishEvent).toHaveBeenCalledWith(p);
         });
 
-        // @characterization 2026-04-18: FishingNodeFish type variant
-        test('NewFishingZoneObject: FishingNodeFish variant dispatches correctly', async () => {
-            // pcap-derived payload; event code overridden to local constant
+        // Pinned: FishingNodeFish variant (P[252]=359). Same stale dispatch. Cross-link: issue #53.
+        test.fails('onEvent routes NewFishingZoneObject FishingNodeFish variant (P[252]=359) to newFishEvent', async () => {
+            // pcap-derived: fishing/spawn.json message[2], P[252]=359
             const fix = await loadFixture('fishing', 'spawn');
-            const msg = fix.messages[2];
-            const p = normalizeParams(msg.parameters);
-            p[252] = EventCodes.NewFishingZoneObject; // override stale fixture code
+            const p = normalizeParams(fix.messages[2].parameters);
 
             EventRouter.onEvent(p);
 
@@ -693,13 +671,13 @@ describe('EventRouter', () => {
     });
 
     // -------------------------------------------------------------------------
-    // onEvent FishingFinished (352)
+    // onEvent FishingFinished (352 local / 356 upstream)
     // -------------------------------------------------------------------------
     describe('onEvent FishingFinished', () => {
-        // @verified 2026-04-18: fishing end dispatches fishingEnd(params)
-        test('FishingFinished synthetic: dispatches fishingEnd', () => {
-            // synthetic: no fishingEnd fixture in corpus
-            const p = {0: 999, 252: EventCodes.FishingFinished};
+        // Pinned: EventCodes.FishingFinished is stale (local 352, real 356). Dispatch fails until EventCodes.js is refreshed (#53).
+        test.fails('onEvent routes FishingFinished (P[252]=356) to fishingHandler.fishingEnd', () => {
+            // synthetic: no fishingEnd fixture in corpus; real upstream value is 356
+            const p = {0: 999, 252: 356};
 
             EventRouter.onEvent(p);
 
@@ -708,23 +686,23 @@ describe('EventRouter', () => {
     });
 
     // -------------------------------------------------------------------------
-    // onEvent NewCagedObject (525) + CagedObjectStateUpdated (526)
+    // onEvent NewCagedObject (525 local / 531 upstream) + CagedObjectStateUpdated (526 local / 532 upstream)
     // -------------------------------------------------------------------------
     describe('onEvent WispCage', () => {
-        // @verified 2026-04-18: cage spawn dispatches newCageEvent(params)
-        test('NewCagedObject synthetic: dispatches newCageEvent', () => {
-            // synthetic: no wispcage fixture in corpus (not observed in 25-min capture)
-            const p = {0: 777, 252: EventCodes.NewCagedObject};
+        // Pinned: EventCodes.NewCagedObject is stale (local 525, upstream 531). Dispatch fails until EventCodes.js is refreshed (#53).
+        test.fails('onEvent routes NewCagedObject (P[252]=531) to wispCageHandler.newCageEvent', () => {
+            // synthetic: no wispcage fixture in corpus; upstream value is 531
+            const p = {0: 777, 252: 531};
 
             EventRouter.onEvent(p);
 
             expect(handlers.wispCageHandler.newCageEvent).toHaveBeenCalledWith(p);
         });
 
-        // @verified 2026-04-18: cage opened dispatches cageOpenedEvent(params)
-        test('CagedObjectStateUpdated synthetic: dispatches cageOpenedEvent', () => {
-            // synthetic: no wispcage-opened fixture in corpus
-            const p = {0: 777, 252: EventCodes.CagedObjectStateUpdated};
+        // Pinned: EventCodes.CagedObjectStateUpdated is stale (local 526, upstream 532). Dispatch fails until EventCodes.js is refreshed (#53).
+        test.fails('onEvent routes CagedObjectStateUpdated (P[252]=532) to wispCageHandler.cageOpenedEvent', () => {
+            // synthetic: no wispcage-opened fixture in corpus; upstream value is 532
+            const p = {0: 777, 252: 532};
 
             EventRouter.onEvent(p);
 
