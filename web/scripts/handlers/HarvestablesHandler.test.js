@@ -351,10 +351,8 @@ describe('HarvestablesHandler', () => {
     });
 
     describe('newHarvestableObject pinned bugs', () => {
-        // Pinned: handler should not route mobileTypeId=-1 through MobsDatabase as living.
-        // Handler isLiving check: mobileTypeId !== null && mobileTypeId !== 65535.
-        // -1 passes both guards, so getResourceInfo(-1) is called. Expected: not called.
-        test.fails('pcap-derived single-spawn: static with mobileTypeId=-1 does not trigger mobsDatabase lookup', async () => {
+        // @verified 2026-04-19: mobileTypeId=-1 sentinel routes as static and skips the mobsDatabase lookup.
+        test('pcap-derived single-spawn: static with mobileTypeId=-1 does not trigger mobsDatabase lookup', async () => {
             const fx = await loadFixture('harvestables', 'single-spawn');
             const msg = fx.messages.find(m => m.parameters['6'] === -1);
             expect(msg).toBeDefined();
