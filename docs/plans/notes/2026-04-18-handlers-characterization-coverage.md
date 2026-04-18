@@ -26,6 +26,12 @@ Living counter. Updated on every test commit. Archived at plan completion.
 | EventRouter | 36 | 0 | 11 | 47 |
 | **Total** | **221** | **14** | **20** | **255** |
 
+## Open observations register
+
+### #52 tracked as `@characterization` pending ground truth
+
+Issue #52 (living Fiber tier mismatch) is NOT a `test.fails` because direction is unresolved. Server `Parameters[7]` and DB `mob.lt` diverge for Fiber critters only (Hide agrees). Observed on radar vs in-game tooltip per #52 description does not match either value. Resolution requires #58 (typeId debug overlay) to capture the offending entity directly. Until then, two `@characterization` tests in `HarvestablesHandler.test.js` document the divergence between MobsHandler and HarvestablesHandler for mobId=529 and mobId=531.
+
 ## Open `test.fails` register
 
 - **HARV-1** HarvestablesHandler.addHarvestable isLiving gate misses mobileTypeId=-1 sentinel. Current code: `isLiving = mobileTypeId !== null && mobileTypeId !== 65535`. Observed in pcap: static resources arrive with mobileTypeId=-1 (likely int16 decode of 0xFFFF). Effect: static resources routed through MobsDatabase.getResourceInfo(-1) before falling back. Pinned by `test.fails('pcap-derived single-spawn: static with mobileTypeId=-1 does not trigger mobsDatabase lookup')` in `HarvestablesHandler.test.js`. Fix candidate: extend guard to `mobileTypeId !== -1`, or canonicalize in the Go parser.
