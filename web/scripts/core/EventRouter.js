@@ -2,6 +2,7 @@
 // Extracted from Utils.js during Phase 1B refactor
 
 import {EventCodes} from '../utils/EventCodes.js';
+import {OperationCodes} from '../utils/OperationCodes.js';
 import {CATEGORIES} from '../constants/LoggerConstants.js';
 
 // Map change debouncing
@@ -278,6 +279,7 @@ export function onEvent(Parameters) {
             playersHandler.updatePlayerFaction(Parameters[0], Parameters[1]);
             break;
 
+        // upstream 590 = UpdateEnemyWarBannerActive; local dispatch labels it "key_sync", semantics diverge.
         case 590:
             window.logger?.debug(CATEGORIES.NETWORK, 'key_sync', {Parameters});
             break;
@@ -285,7 +287,8 @@ export function onEvent(Parameters) {
 }
 
 export function onRequest(Parameters) {
-    if (Parameters[253] == 21 || Parameters[253] == 22) {
+    // 22 = OperationCodes.Move. 21 = legacy pre-Protocol18 Move (upstream 21 is now GetShopTilesForCategory).
+    if (Parameters[253] == 21 || Parameters[253] == OperationCodes.Move) {
         if (Array.isArray(Parameters[1]) && Parameters[1].length === 2) {
             updateLocalPlayerPosition(Parameters[1][0], Parameters[1][1]);
             window.logger?.debug(CATEGORIES.PLAYERS, 'Operation21_LocalPlayer', {lpX, lpY});
@@ -305,7 +308,7 @@ export function onRequest(Parameters) {
 }
 
 export function onResponse(Parameters, clearHandlersCallback) {
-    if (Parameters[253] == 41) {
+    if (Parameters[253] == OperationCodes.ChangeCluster) {
         const newMapId = Parameters[0];
         if (typeof newMapId === 'string' && newMapId.length > 0 && newMapId !== map.id) {
             const previousMapId = map.id;
@@ -336,6 +339,7 @@ export function onResponse(Parameters, clearHandlersCallback) {
         return;
     }
 
+    // upstream 35 = InventoryStack; this branch treats it as a map-change response, semantics diverge.
     if (Parameters[253] == 35) {
         const newMapId = Parameters[0];
         const now = Date.now();
@@ -384,7 +388,7 @@ export function onResponse(Parameters, clearHandlersCallback) {
         }
     }
     // All data on the player joining the map (us)
-    else if (Parameters[253] == 2) {
+    else if (Parameters[253] == OperationCodes.Join) {
         // Decode position from Buffer or Array
         if (Parameters[9] && Parameters[9].type === 'Buffer') {
             const uint8Array = new Uint8Array(Parameters[9].data);
@@ -427,6 +431,7 @@ export function onResponse(Parameters, clearHandlersCallback) {
         }
 
         clearHandlersCallback();
+    // upstream 137 = ChangeGuildTax; inline label says "character stats", branch appears dead.
     } else if (Parameters[253] == 137) {
         // Character stats response - not currently used
     }
