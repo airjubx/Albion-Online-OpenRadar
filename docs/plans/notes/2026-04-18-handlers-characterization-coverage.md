@@ -18,13 +18,13 @@ Living counter. Updated on every test commit. Archived at plan completion.
 |---|---:|---:|---:|---:|
 | PlayersHandler | 37 | 2 | 2 | 41 |
 | HarvestablesHandler | 49 | 5 | 1 | 55 |
-| MobsHandler | 65 | 1 | 0 | 66 |
+| MobsHandler | 69 | 1 | 0 | 131 |
 | ChestsHandler | 13 | 0 | 0 | 13 |
 | FishingHandler | 9 | 0 | 1 | 10 |
 | DungeonsHandler | 19 | 0 | 0 | 19 |
 | WispCageHandler | 9 | 1 | 1 | 11 |
 | EventRouter | 46 | 0 | 1 | 47 |
-| **Total** | **246** | **11** | **7** | **264** |
+| **Total** | **250** | **11** | **7** | **329** |
 
 ## Open `test.fails` register
 
